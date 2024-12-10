@@ -15,7 +15,10 @@ if __name__ == "__main__":
     parser.add_argument('--blockSize', type=int, required=True,
                         help='Block size for the simulation')
 
+    parser.add_argument('--barPosition', type=int, required=False,
+                        help='Optional bar position for the simulation', default=0)
+
     args = parser.parse_args()
-    
+
     Simulation.run_simulation(
-        args.burstiness, args.simulation_time, args.periodPrintLR, args.blockSize)
+        args.burstiness, args.simulation_time, args.periodPrintLR, args.blockSize, args.barPosition)

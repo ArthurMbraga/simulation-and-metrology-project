@@ -13,7 +13,7 @@ from src.sources.PoissonSource import PoissonSource
 
 class Simulation:
     @staticmethod
-    def run_simulation(burstiness, simulation_time, periodPrintLR, blockSize):
+    def run_simulation(burstiness, simulation_time, periodPrintLR, blockSize, barPosition=0):
         env = simpy.Environment()
 
         Globals.periodPrintLR = periodPrintLR
@@ -44,7 +44,7 @@ class Simulation:
         Globals.sources[videoSource.ident] = videoSource
 
         simulation_progress = tqdm(
-            total=simulation_time, desc=f"Simulation Burstiness {burstiness}")
+            total=simulation_time, desc=f"Simulation Burstiness {burstiness}", position=barPosition)
         env.process(Simulation.progress_bar(env, simulation_progress))
         env.run(until=simulation_time)
         simulation_progress.close()

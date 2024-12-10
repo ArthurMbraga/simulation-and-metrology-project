@@ -1,5 +1,6 @@
 import getpass
 import os
+from platform import machine
 import select
 import paramiko
 from paramiko import SSHClient
@@ -16,11 +17,11 @@ login = input("Enter login: ")
 # Prompt for the password securely
 password = getpass.getpass("Enter password for {}: ".format(login))
 
-remote_folder = "/tmp/{}/".format(login)
+remote_folder = "/tmp/{}/sim-and-metrology/".format(login)
 
 # List of computers
 allComputers = [
-    "tp-1a201-01", "tp-1a201-03", "tp-1a201-04", "tp-1a201-16", "tp-1a201-17",
+    "tp-1a201-01", "tp-1a201-02", "tp-1a201-04", "tp-1a201-16", "tp-1a201-17",
     "tp-1a201-18", "tp-1a201-19", "tp-1a201-20", "tp-1a201-21", "tp-1a201-23",
     "tp-1a201-25", "tp-1a201-26", "tp-1a201-27", "tp-1a201-28", "tp-1a201-29",
     "tp-1a201-30", "tp-1a201-31", "tp-1a201-32", "tp-1a201-33", "tp-1a201-34",
@@ -39,7 +40,7 @@ if len(allComputers) != len(set(allComputers)):
     exit(0)
 
 
-burstiness_values = [1, 2] # 5, 10, 20, 30, 70, 100]
+burstiness_values = [2, 5, 10]  # 20, 30, 70, 100]
 simulation_time = 10**3
 periodPrintLR = 10**3
 blockSize = 10**1
@@ -59,56 +60,63 @@ def stream_output(channel):
         time.sleep(0.1)  # Avoid busy-waiting
 
 # Deploy the python project on computer
-
-
-def deploy_project(ssh, remote_folder):
+def deploy_project(ssh, remote_folder, machineId=None):
     repo_url = "https://github.com/ArthurMbraga/simulation-and-metrology-project.git"
 
+    def exec_command_with_error_check(command):
+        _, stdout, stderr = ssh.exec_command(command)
+        exit_status = stdout.channel.recv_exit_status()
+        if exit_status != 0:
+            print(f"Error executing command: {command}")
+            print(stderr.read().decode())
+            exit(exit_status)
+        return stdout
+
+    # Check if remote_folder exists
+    exec_command_with_error_check(
+        "if [ ! -d {} ]; then mkdir -p {}; fi".format(remote_folder, remote_folder))
+
     # Check if repository already exists
-    _, stdout, _ = ssh.exec_command(
+    stdout = exec_command_with_error_check(
         "cd {} && if [ -d .git ]; then echo 'exists'; fi".format(remote_folder))
     if 'exists' in stdout.read().decode():
-        print("Repository already exists in {}".format(remote_folder))
-        print("Pulling repository on {}".format(remote_folder))
-        _, stdout, _ = ssh.exec_command(
+        print("Repository already exists in {}".format(machineId))
+        print("Pulling repository on {}".format(machineId))
+        exec_command_with_error_check(
             "cd {} && git pull".format(remote_folder))
-        stdout.channel.recv_exit_status()
-
     else:
-        print("Cloning repository on {}".format(remote_folder))
-        _, stdout, _ = ssh.exec_command(
+        print("Cloning repository on {}".format(machineId))
+        exec_command_with_error_check(
             "cd {} && git clone {} .".format(remote_folder, repo_url))
-        stdout.channel.recv_exit_status()
 
     # Check if virtual environment already exists
-    _, stdout, _ = ssh.exec_command(
+    stdout = exec_command_with_error_check(
         "cd {} && if [ -d venv ]; then echo 'exists'; fi".format(remote_folder))
     if 'exists' in stdout.read().decode():
-        print("Virtual environment already exists in {}".format(remote_folder))
+        print("Virtual environment already exists in {}".format(machineId))
     else:
-        print("Creating virtual environment on {}".format(remote_folder))
-        _, stdout, _ = ssh.exec_command(
+        print("Creating virtual environment on {}".format(machineId))
+        exec_command_with_error_check(
             "cd {} && python3 -m venv venv".format(remote_folder))
-        stdout.channel.recv_exit_status()
 
-    print("Installing requirements on {}".format(remote_folder))
-    _, stdout, _ = ssh.exec_command(
+    print("Installing requirements on {}".format(machineId))
+    exec_command_with_error_check(
         "cd {} && source venv/bin/activate && pip install -r requirements.txt".format(remote_folder))
-    stdout.channel.recv_exit_status()
 
 
 # Attach the terminal to the process and print all output until python process ends
-def attach_and_run_simulation(ssh, burstiness, simulation_time, periodPrintLR, blockSize):
+def attach_and_run_simulation(ssh, burstiness, simulation_time, periodPrintLR, blockSize, index):
     command = (
         f"cd {remote_folder} && source venv/bin/activate && python3 main.py "
         f"--burstiness {burstiness} "
         f"--simulation_time {simulation_time} "
         f"--periodPrintLR {periodPrintLR} "
         f"--blockSize {blockSize}"
+        f"--barPosition {index}"
     )
     stdin, stdout, stderr = ssh.exec_command(command, get_pty=True)
 
-   # Start a thread to stream the stdout
+    # Start a thread to stream the stdout
     stdout_thread = threading.Thread(
         target=stream_output, args=(stdout.channel,))
     stderr_thread = threading.Thread(
@@ -116,8 +124,9 @@ def attach_and_run_simulation(ssh, burstiness, simulation_time, periodPrintLR, b
     stdout_thread.start()
     stderr_thread.start()
 
-    stdout_thread.join()
-    stderr_thread.join()
+    # Wait for the process to end
+    stdout.channel.recv_exit_status()
+    stderr.channel.recv_exit_status()
 
     print("Simulation finished for burstiness {}".format(burstiness))
 
@@ -139,11 +148,11 @@ def run_simulation_on_computer(index, c):
         print("Connected to {}".format(c))
 
         print("Deploying project on {}".format(c))
-        deploy_project(ssh, remote_folder)
+        deploy_project(ssh, remote_folder, c)
         print("Project deployed on {}".format(c))
 
         attach_and_run_simulation(
-            ssh, burstiness_values[index], simulation_time, periodPrintLR, blockSize)
+            ssh, burstiness_values[index], simulation_time, periodPrintLR, blockSize, index)
     except paramiko.AuthenticationException:
         print("Authentication failed for {}".format(c))
     except paramiko.SSHException as ssh_exception:
@@ -152,16 +161,17 @@ def run_simulation_on_computer(index, c):
         ssh.close()
 
 
-index = -1
 threads = []
-for index, c in enumerate(computers):
+for idx, c in enumerate(computers):
     thread = threading.Thread(
-        target=run_simulation_on_computer, args=(index, c))
-    threads.append(thread)
+        target=run_simulation_on_computer, args=(idx, c))
+    print("Starting thread for {}".format(c))
     thread.start()
+    threads.append(thread)  # Add the thread to the list
 
-for thread in threads:
-    thread.join()
+# Wait for all threads to finish in reverse order
+for t in reversed(threads):
+    t.join()
 
 
 # Kill all processes

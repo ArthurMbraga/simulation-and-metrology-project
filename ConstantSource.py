@@ -1,5 +1,5 @@
-import Packet
-import Source
+from Packet import Packet
+from Source import Source
 
 
 class ConstantSource(Source):
@@ -16,4 +16,3 @@ class ConstantSource(Source):
             p = Packet(self.env.now, self.ident, self.packetSize)
 
             self.q.reception(p)
-            self.updateMetrics()

@@ -1,17 +1,22 @@
 import queue
 
+import Globals
+from LimitCounter import LimitCounter
+
 
 class QueueClass(object):
     def __init__(self, env, serviceRate):
         self.env = env
         self.inService = False
         self.buffer = queue.Queue()
+        self.queueSize = 0
         self.queueLength = 0
+
         self.serviceRate = serviceRate
+        self.printQueueCounter = LimitCounter(10000)
+        self.debug = False
 
     def service(self):
-        global sources
-
         p = self.buffer.get()
         self.inService = True
 
@@ -20,19 +25,28 @@ class QueueClass(object):
 
         response_time = self.env.now - p.t
 
-        sources[p.ident].responseTimes += response_time
-        sources[p.ident].nbEmissions += 1
+        Globals.sources[p.ident].responseTimes += response_time
+        Globals.sources[p.ident].nbEmissions += 1
+        Globals.sources[p.ident].updateMetrics()
 
-        self.queueLength -= p.pktSize
+        self.queueSize -= p.pktSize
+        self.queueLength -= 1
+
         del p
 
-        if self.queueLength > 0:
+        if self.queueSize > 0:
             self.env.process(self.service())
         else:
             self.inService = False
 
     def reception(self, pkt):
-        self.queueLength += pkt.pktSize
+        self.queueSize += pkt.pktSize
+        self.queueLength += 1
+
+        if self.debug and self.printQueueCounter.incrementAndCheck():
+            print(f"Queue size: {self.queueSize} bytes")
+            print(f"Queue length: {self.queueLength} packets")
+
         self.buffer.put(pkt)
 
         if not self.inService:

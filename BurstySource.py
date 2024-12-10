@@ -5,36 +5,38 @@ from Source import Source
 
 
 class BurstySource(Source):
-    def __init__(self, env, q, ident, transmissionRate, packetSize, avgPeriodOn, peakRate):
+    def __init__(self, env, q, ident, transmissionRate, packetSize, avgPeriodOn, burstiness):
         super().__init__(env, q, ident, transmissionRate)
         self.packetSize = packetSize
+
         self.avgPeriodOn = avgPeriodOn
+        self.avgPeriodOff = self.avgPeriodOn * (burstiness - 1)
 
-        lamb = self.packetSize / self.transmissionRate
-        print(f"avgPeriodOn: {avgPeriodOn}")
-        self.avgPeriodOff = ((peakRate * avgPeriodOn) / lamb) - avgPeriodOn
+        self.peakRate = burstiness * self.transmissionRate
 
-        print(f"avgPeriodOff: {self.avgPeriodOff}")
-        print(
-            f"peakRate * avgPeriodOn / transmissionRate: {peakRate * avgPeriodOn / transmissionRate}")
-        self.peakRate = peakRate
         self.cycleStart = 0
+        self.debug = False
 
     def run(self):
         periodOn = 0
         periodOff = 0
 
         while True:
-            now = self.env.now
-            if self.cycleStart + periodOn + periodOff <= now:
-                self.cycleStart = now
-                periodOn = np.random.exponential(1/self.avgPeriodOn)
-                periodOff = np.random.exponential(1/self.avgPeriodOff)
-            elif self.cycleStart + periodOn <= now:
-                # During On periods traffic is emitted at a constant peakRate
-                lam = 1/self.peakRate
+            self.cycleStart = self.env.now
+            periodOn = np.random.exponential(self.avgPeriodOn)
+            periodOff = np.random.exponential(self.avgPeriodOff)
+
+            self.debug and print(f"periodOn: {periodOn}")
+            self.debug and print(f"periodOff: {periodOff}")
+
+            yield self.env.timeout(periodOff)
+
+            lam = self.packetSize / self.peakRate
+            self.debug and print(f"lam: {lam}")
+
+            while self.env.now - self.cycleStart - periodOff < periodOn:
+
                 yield self.env.timeout(lam)
                 p = Packet(self.env.now, self.ident, self.packetSize)
 
                 self.q.reception(p)
-                self.updateMetrics()

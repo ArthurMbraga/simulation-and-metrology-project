@@ -6,7 +6,7 @@ from src.Simulation import Simulation
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description='Run simulation with given parameters.')
-    parser.add_argument('--burstiness', type=int, required=True,
+    parser.add_argument('--burstiness', type=float, required=True,
                         help='Burstiness value for the simulation')
     parser.add_argument('--simulation_time', type=int,
                         required=True, help='Total simulation time')
@@ -15,7 +15,7 @@ if __name__ == "__main__":
     parser.add_argument('--blockSize', type=int, required=True,
                         help='Block size for the simulation')
 
-    parser.add_argument('--barPosition', type=float, required=False,
+    parser.add_argument('--barPosition', type=int, required=False,
                         help='Optional bar position for the simulation', default=0)
 
     args = parser.parse_args()

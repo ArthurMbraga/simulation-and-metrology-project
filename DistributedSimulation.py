@@ -1,4 +1,5 @@
 import getpass
+from math import e
 import os
 from platform import machine
 import select
@@ -40,7 +41,7 @@ if len(allComputers) != len(set(allComputers)):
     exit(0)
 
 
-burstiness_values = [2, 5, 10]  # 20, 30, 70, 100]
+burstiness_values = [1.1, 1.3, 1.7, 2, 5, 10, 20, 30, 70, 100]
 simulation_time = 10**3
 periodPrintLR = 10**3
 blockSize = 10**1
@@ -60,6 +61,8 @@ def stream_output(channel):
         time.sleep(0.1)  # Avoid busy-waiting
 
 # Deploy the python project on computer
+
+
 def deploy_project(ssh, remote_folder, machineId=None):
     repo_url = "https://github.com/ArthurMbraga/simulation-and-metrology-project.git"
 
@@ -106,27 +109,30 @@ def deploy_project(ssh, remote_folder, machineId=None):
 
 # Attach the terminal to the process and print all output until python process ends
 def attach_and_run_simulation(ssh, burstiness, simulation_time, periodPrintLR, blockSize, index):
-    command = (
-        f"cd {remote_folder} && source venv/bin/activate && python3 main.py "
-        f"--burstiness {burstiness} "
-        f"--simulation_time {simulation_time} "
-        f"--periodPrintLR {periodPrintLR} "
-        f"--blockSize {blockSize}"
+    command = " ".join([
+        f"cd {remote_folder} && source venv/bin/activate && python3 main.py",
+        f"--burstiness {burstiness}",
+        f"--simulation_time {simulation_time}",
+        f"--periodPrintLR {periodPrintLR}",
+        f"--blockSize {blockSize}",
         f"--barPosition {index}"
-    )
+    ])
+
     stdin, stdout, stderr = ssh.exec_command(command, get_pty=True)
 
     # Start a thread to stream the stdout
     stdout_thread = threading.Thread(
         target=stream_output, args=(stdout.channel,))
-    stderr_thread = threading.Thread(
-        target=stream_output, args=(stderr.channel,))
     stdout_thread.start()
-    stderr_thread.start()
 
     # Wait for the process to end
-    stdout.channel.recv_exit_status()
-    stderr.channel.recv_exit_status()
+    exit_status = stdout.channel.recv_exit_status()
+    if exit_status != 0:
+        print(stderr.read().decode())
+        print("Error executing command: {}".format(command))
+        return
+
+    stdout_thread.join()
 
     print("Simulation finished for burstiness {}".format(burstiness))
 

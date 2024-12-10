@@ -2,7 +2,7 @@ import argparse
 
 from src.Simulation import Simulation
 
-
+# Example python3 main.py --burstiness 5 --simulation_time 10000 --periodPrintLR 10 --blockSize 10
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description='Run simulation with given parameters.')

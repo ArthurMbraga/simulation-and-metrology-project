@@ -41,7 +41,7 @@ if len(allComputers) != len(set(allComputers)):
     exit(0)
 
 
-burstiness_values = [1.1, 1.3, 1.7, 2, 5, 10, 20, 30, 70, 100]
+burstiness_values = [1.1, 1.3, 2, 5, 10, 20, 30, 70, 100]
 simulation_time = 10**3
 periodPrintLR = 10**3
 blockSize = 10**1
@@ -109,41 +109,46 @@ def deploy_project(ssh, remote_folder, machineId=None):
 
 # Attach the terminal to the process and print all output until python process ends
 def attach_and_run_simulation(ssh, burstiness, simulation_time, periodPrintLR, blockSize, index):
-    command = " ".join([
-        f"cd {remote_folder} && source venv/bin/activate && python3 main.py",
-        f"--burstiness {burstiness}",
-        f"--simulation_time {simulation_time}",
-        f"--periodPrintLR {periodPrintLR}",
-        f"--blockSize {blockSize}",
-        f"--barPosition {index}"
-    ])
+    # command = " ".join([
+    #     f"cd {remote_folder} && source venv/bin/activate && python3 main.py",
+    #     f"--burstiness {burstiness}",
+    #     f"--simulation_time {simulation_time}",
+    #     f"--periodPrintLR {periodPrintLR}",
+    #     f"--blockSize {blockSize}",
+    #     f"--barPosition {index}"
+    # ])
 
-    stdin, stdout, stderr = ssh.exec_command(command, get_pty=True)
+    # stdin, stdout, stderr = ssh.exec_command(command, get_pty=True)
 
-    # Start a thread to stream the stdout
-    stdout_thread = threading.Thread(
-        target=stream_output, args=(stdout.channel,))
-    stdout_thread.start()
+    # # Start a thread to stream the stdout
+    # stdout_thread = threading.Thread(
+    #     target=stream_output, args=(stdout.channel,))
+    # stdout_thread.start()
 
-    # Wait for the process to end
-    exit_status = stdout.channel.recv_exit_status()
-    if exit_status != 0:
-        print(stderr.read().decode())
-        print("Error executing command: {}".format(command))
-        return
+    # # Wait for the process to end
+    # exit_status = stdout.channel.recv_exit_status()
+    # if exit_status != 0:
+    #     print(stderr.read().decode())
+    #     print("Error executing command: {}".format(command))
+    #     return
 
-    stdout_thread.join()
+    # stdout_thread.join()
 
-    print("Simulation finished for burstiness {}".format(burstiness))
+    # print("Simulation finished for burstiness {}".format(burstiness))
+
+    # Create results folder if it does not exist
+    os.makedirs('results', exist_ok=True)
+
+    # Wait for the files to be written
+    time.sleep(10)
 
     # Update local metrics file
     print("Downloading results for burstiness {}".format(burstiness))
     with SCPClient(ssh.get_transport()) as scp:
         scp.get(
-            f"{remote_folder}results/response_times_burstiness_{burstiness}.csv", "./results/")
+            f"{remote_folder}results/response_times_burstiness_{burstiness:.1f}.csv", "./results/")
         scp.get(
-            f"{remote_folder}results/block_response_times_burstiness_{burstiness}.csv", "./results/")
-
+            f"{remote_folder}results/block_response_times_burstiness_{burstiness:.1f}.csv", "./results/")
 
 # Run the simulation on the computer
 def run_simulation_on_computer(index, c):
@@ -159,6 +164,8 @@ def run_simulation_on_computer(index, c):
 
         attach_and_run_simulation(
             ssh, burstiness_values[index], simulation_time, periodPrintLR, blockSize, index)
+        
+        print("Simulation finished for burstiness {}".format(burstiness_values[index]))
     except paramiko.AuthenticationException:
         print("Authentication failed for {}".format(c))
     except paramiko.SSHException as ssh_exception:

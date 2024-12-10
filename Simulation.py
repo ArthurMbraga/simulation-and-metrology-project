@@ -12,7 +12,8 @@ from tqdm import tqdm
 class Simulation:
     def run_simulation(self, burstiness_values, simulation_time):
         total_simulations = len(burstiness_values)
-        overall_progress = tqdm(total=total_simulations, desc="Overall Progress")
+        overall_progress = tqdm(total=total_simulations,
+                                desc="Overall Progress")
 
         for burstiness in burstiness_values:
             env = simpy.Environment()
@@ -44,7 +45,8 @@ class Simulation:
                                        packetSize=8000, avgPeriodOn=10**-3, burstiness=burstiness)
             Globals.sources[videoSource.ident] = videoSource
 
-            simulation_progress = tqdm(total=simulation_time, desc=f"Simulation Burstiness {burstiness}")
+            simulation_progress = tqdm(
+                total=simulation_time, desc=f"Simulation Burstiness {burstiness}")
             env.process(self.progress_bar(env, simulation_progress))
             env.run(until=simulation_time)
             simulation_progress.close()

@@ -7,6 +7,7 @@ from sources.PoissonSource import PoissonSource
 from sources.BurstySource import BurstySource
 import Globals
 from tqdm import tqdm
+import argparse
 
 
 class Simulation:
@@ -70,17 +71,18 @@ class Simulation:
 
 
 if __name__ == "__main__":
-    burstiness_values = [1, 2, 5, 10, 20, 30, 70, 100]
-    simulation_time = 10**4
-    periodPrintLR = 10**3
-    blockSize = 10**1
+    parser = argparse.ArgumentParser(
+        description='Run simulation with given parameters.')
+    parser.add_argument('--burstiness', type=int, required=True,
+                        help='Burstiness value for the simulation')
+    parser.add_argument('--simulation_time', type=int,
+                        required=True, help='Total simulation time')
+    parser.add_argument('--periodPrintLR', type=int,
+                        required=True, help='Period to print learning rate')
+    parser.add_argument('--blockSize', type=int, required=True,
+                        help='Block size for the simulation')
 
-    total_simulations = len(burstiness_values)
-    overall_progress = tqdm(total=total_simulations, desc="Overall Progress")
+    args = parser.parse_args()
 
-    for burstiness in burstiness_values:
-        Simulation.run_simulation(
-            burstiness, simulation_time, periodPrintLR, blockSize)
-        overall_progress.update(1)
-
-    overall_progress.close()
+    Simulation.run_simulation(
+        args.burstiness, args.simulation_time, args.periodPrintLR, args.blockSize)

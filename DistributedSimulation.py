@@ -17,7 +17,7 @@ file_suffix = "-1.0-jar-with-dependencies.jar"
 remote_folder = "/tmp/{}/".format(login)
 
 # List of computers
-computers = [
+allComputers = [
     "tp-1a201-01", "tp-1a201-03", "tp-1a201-04", "tp-1a201-16", "tp-1a201-17",
     "tp-1a201-18", "tp-1a201-19", "tp-1a201-20", "tp-1a201-21", "tp-1a201-23",
     "tp-1a201-25", "tp-1a201-26", "tp-1a201-27", "tp-1a201-28", "tp-1a201-29",
@@ -27,21 +27,26 @@ computers = [
     "tp-1a207-07", "tp-1a207-08", "tp-1a207-11", "tp-1a207-12", "tp-1a207-13",
     "tp-1a207-14", "tp-1a207-15", "tp-1a207-19", "tp-1a207-17", "tp-1a207-18",
 ]
-master = "tp-m5-09"
 
 # Clear the terminal
 os.system("clear")
-
-allComputers = computers + [master]
 
 # Check if there is some repeated computer
 if len(allComputers) != len(set(allComputers)):
     print("There are repeated computers")
     exit(0)
 
-# Attach the terminal to the process and print all output until java process ends
+
+burstiness_values = [1, 2, 5, 10, 20, 30, 70, 100]
+simulation_time = 10**4
+periodPrintLR = 10**3
+blockSize = 10**1
+
+# Select some computers to run the simulation
+computers = allComputers[:len(burstiness_values)]
 
 
+# Attach the terminal to the process and print all output until python process ends
 def attach_and_run_master(ssh, ips, amount_of_data):
     stdin, stdout, stderr = ssh.exec_command(
         "cd {}; java -Xms8g -Xmx10g -jar {}{} {} {}".format(
@@ -72,7 +77,7 @@ def attach_and_run_master(ssh, ips, amount_of_data):
 
 
 index = -1
-for c in allComputers:
+for c in computers:
     try:
         index += 1
         ssh = SSHClient()
@@ -128,7 +133,7 @@ for c in allComputers:
 
 
 # Kill all processes
-for c in allComputers:
+for c in computers:
     try:
         ssh = SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())

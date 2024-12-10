@@ -5,6 +5,7 @@ import paramiko
 from paramiko import SSHClient
 from scp import SCPClient
 import threading
+import time
 
 # Remember to build the project before distributing it
 # $ pyinstaller --onefile main.py
@@ -38,8 +39,8 @@ if len(allComputers) != len(set(allComputers)):
     exit(0)
 
 
-burstiness_values = [1]  # , 2, 5, 10, 20, 30, 70, 100]
-simulation_time = 10**4
+burstiness_values = [1, 2] # 5, 10, 20, 30, 70, 100]
+simulation_time = 10**3
 periodPrintLR = 10**3
 blockSize = 10**1
 
@@ -47,7 +48,19 @@ blockSize = 10**1
 computers = allComputers[:len(burstiness_values)]
 
 
+def stream_output(channel):
+    while not channel.exit_status_ready():
+        if channel.recv_ready():
+            line = channel.recv(1024).decode('utf-8')
+            if line:
+                print(line, end='')  # Print to keep output visible
+            else:
+                break
+        time.sleep(0.1)  # Avoid busy-waiting
+
 # Deploy the python project on computer
+
+
 def deploy_project(ssh, remote_folder):
     repo_url = "https://github.com/ArthurMbraga/simulation-and-metrology-project.git"
 
@@ -56,6 +69,11 @@ def deploy_project(ssh, remote_folder):
         "cd {} && if [ -d .git ]; then echo 'exists'; fi".format(remote_folder))
     if 'exists' in stdout.read().decode():
         print("Repository already exists in {}".format(remote_folder))
+        print("Pulling repository on {}".format(remote_folder))
+        _, stdout, _ = ssh.exec_command(
+            "cd {} && git pull".format(remote_folder))
+        stdout.channel.recv_exit_status()
+
     else:
         print("Cloning repository on {}".format(remote_folder))
         _, stdout, _ = ssh.exec_command(
@@ -78,9 +96,8 @@ def deploy_project(ssh, remote_folder):
         "cd {} && source venv/bin/activate && pip install -r requirements.txt".format(remote_folder))
     stdout.channel.recv_exit_status()
 
+
 # Attach the terminal to the process and print all output until python process ends
-
-
 def attach_and_run_simulation(ssh, burstiness, simulation_time, periodPrintLR, blockSize):
     command = (
         f"cd {remote_folder} && source venv/bin/activate && python3 main.py "
@@ -89,26 +106,23 @@ def attach_and_run_simulation(ssh, burstiness, simulation_time, periodPrintLR, b
         f"--periodPrintLR {periodPrintLR} "
         f"--blockSize {blockSize}"
     )
-    stdin, stdout, stderr = ssh.exec_command(command)
+    stdin, stdout, stderr = ssh.exec_command(command, get_pty=True)
 
-   # Print stdout and stderr in real-time
-    while True:
-        # Use select to wait for data to be available on either stdout or stderr
-        ready, _, _ = select.select([stdout.channel, stderr.channel], [], [])
-        if stdout.channel in ready:
-            line = stdout.readline()
-            if line:
-                print(line, end='')
-            else:
-                break
-        if stderr.channel in ready:
-            line = stderr.readline()
-            if line:
-                print(line, end='')
-            else:
-                break
+   # Start a thread to stream the stdout
+    stdout_thread = threading.Thread(
+        target=stream_output, args=(stdout.channel,))
+    stderr_thread = threading.Thread(
+        target=stream_output, args=(stderr.channel,))
+    stdout_thread.start()
+    stderr_thread.start()
+
+    stdout_thread.join()
+    stderr_thread.join()
+
+    print("Simulation finished for burstiness {}".format(burstiness))
 
     # Update local metrics file
+    print("Downloading results for burstiness {}".format(burstiness))
     with SCPClient(ssh.get_transport()) as scp:
         scp.get(
             f"{remote_folder}results/response_times_burstiness_{burstiness}.csv", "./results/")

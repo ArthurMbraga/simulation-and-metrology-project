@@ -1,5 +1,6 @@
 import getpass
 import os
+import select
 import paramiko
 from paramiko import SSHClient
 from scp import SCPClient
@@ -48,28 +49,41 @@ computers = allComputers[:len(burstiness_values)]
 
 # Deploy the python project on computer
 def deploy_project(ssh, remote_folder):
-    # Remove and recreate the remote folder
-    ssh.exec_command("rm -rf {}".format(remote_folder))
-    ssh.exec_command("mkdir -p {}".format(remote_folder))
-
     repo_url = "https://github.com/ArthurMbraga/simulation-and-metrology-project.git"
-    
-    print("Cloning repository on {}".format(remote_folder)) 
-    ssh.exec_command("cd {} && git clone {}".format(remote_folder, repo_url))
 
-    
-    # Create virtual environment
-    ssh.exec_command("cd {} && python3 -m venv venv".format(remote_folder)) 
-    print("Virtual environment created on {}".format(remote_folder))
+    # Check if repository already exists
+    _, stdout, _ = ssh.exec_command(
+        "cd {} && if [ -d .git ]; then echo 'exists'; fi".format(remote_folder))
+    if 'exists' in stdout.read().decode():
+        print("Repository already exists in {}".format(remote_folder))
+    else:
+        print("Cloning repository on {}".format(remote_folder))
+        _, stdout, _ = ssh.exec_command(
+            "cd {} && git clone {} .".format(remote_folder, repo_url))
+        stdout.channel.recv_exit_status()
+
+    # Check if virtual environment already exists
+    _, stdout, _ = ssh.exec_command(
+        "cd {} && if [ -d venv ]; then echo 'exists'; fi".format(remote_folder))
+    if 'exists' in stdout.read().decode():
+        print("Virtual environment already exists in {}".format(remote_folder))
+    else:
+        print("Creating virtual environment on {}".format(remote_folder))
+        _, stdout, _ = ssh.exec_command(
+            "cd {} && python3 -m venv venv".format(remote_folder))
+        stdout.channel.recv_exit_status()
+
     print("Installing requirements on {}".format(remote_folder))
-    ssh.exec_command("cd {} && source venv/bin/activate && pip install -r requirements.txt".format(remote_folder))
-
-
+    _, stdout, _ = ssh.exec_command(
+        "cd {} && source venv/bin/activate && pip install -r requirements.txt".format(remote_folder))
+    stdout.channel.recv_exit_status()
 
 # Attach the terminal to the process and print all output until python process ends
+
+
 def attach_and_run_simulation(ssh, burstiness, simulation_time, periodPrintLR, blockSize):
     command = (
-        f"cd {remote_folder} && source venv/bin/activate && python3 Simulation.py "
+        f"cd {remote_folder} && source venv/bin/activate && python3 main.py "
         f"--burstiness {burstiness} "
         f"--simulation_time {simulation_time} "
         f"--periodPrintLR {periodPrintLR} "
@@ -77,23 +91,22 @@ def attach_and_run_simulation(ssh, burstiness, simulation_time, periodPrintLR, b
     )
     stdin, stdout, stderr = ssh.exec_command(command)
 
-    # Print all output and error messages
-    count = 0
-    while not stdout.channel.exit_status_ready():
-        for line in stdout:
-            count += 1
-            print(line, end="")
-            if count > 10000:
+   # Print stdout and stderr in real-time
+    while True:
+        # Use select to wait for data to be available on either stdout or stderr
+        ready, _, _ = select.select([stdout.channel, stderr.channel], [], [])
+        if stdout.channel in ready:
+            line = stdout.readline()
+            if line:
+                print(line, end='')
+            else:
                 break
-
-        for line in stderr:
-            count += 1
-            print(line, end="")
-            if count > 10000:
+        if stderr.channel in ready:
+            line = stderr.readline()
+            if line:
+                print(line, end='')
+            else:
                 break
-
-    for line in stderr:
-        print(line, end="")
 
     # Update local metrics file
     with SCPClient(ssh.get_transport()) as scp:
@@ -112,7 +125,7 @@ def run_simulation_on_computer(index, c):
         print("Connected to {}".format(c))
 
         print("Deploying project on {}".format(c))
-        # deploy_project(ssh, remote_folder)
+        deploy_project(ssh, remote_folder)
         print("Project deployed on {}".format(c))
 
         attach_and_run_simulation(

@@ -16,6 +16,7 @@ if __name__ == "__main__":
                         help='Block size for the simulation')
 
     args = parser.parse_args()
-
+    print("Running simulation...")
+    
     Simulation.run_simulation(
         args.burstiness, args.simulation_time, args.periodPrintLR, args.blockSize)

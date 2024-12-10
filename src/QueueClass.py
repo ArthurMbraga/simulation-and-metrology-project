@@ -1,7 +1,7 @@
 import queue
 
-import Globals
-from LimitCounter import LimitCounter
+import src.Globals as Globals
+from src.LimitCounter import LimitCounter
 
 
 class QueueClass(object):
@@ -13,6 +13,7 @@ class QueueClass(object):
         self.queueLength = 0
 
         self.serviceRate = serviceRate
+
         self.printQueueCounter = LimitCounter(10000)
         self.debug = False
 

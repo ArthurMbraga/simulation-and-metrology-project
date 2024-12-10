@@ -1,13 +1,14 @@
 import os
-import simpy
+
 import pandas as pd
-from QueueClass import QueueClass
-from sources.ConstantSource import ConstantSource
-from sources.PoissonSource import PoissonSource
-from sources.BurstySource import BurstySource
-import Globals
+import simpy
 from tqdm import tqdm
-import argparse
+
+from src import Globals
+from src.QueueClass import QueueClass
+from src.sources.BurstySource import BurstySource
+from src.sources.ConstantSource import ConstantSource
+from src.sources.PoissonSource import PoissonSource
 
 
 class Simulation:
@@ -68,21 +69,3 @@ class Simulation:
         while True:
             progress.update(1)
             yield env.timeout(1)
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description='Run simulation with given parameters.')
-    parser.add_argument('--burstiness', type=int, required=True,
-                        help='Burstiness value for the simulation')
-    parser.add_argument('--simulation_time', type=int,
-                        required=True, help='Total simulation time')
-    parser.add_argument('--periodPrintLR', type=int,
-                        required=True, help='Period to print learning rate')
-    parser.add_argument('--blockSize', type=int, required=True,
-                        help='Block size for the simulation')
-
-    args = parser.parse_args()
-
-    Simulation.run_simulation(
-        args.burstiness, args.simulation_time, args.periodPrintLR, args.blockSize)

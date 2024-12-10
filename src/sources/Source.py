@@ -1,7 +1,9 @@
 import math
+
 import numpy as np
-import Globals
-from LimitCounter import LimitCounter
+
+from src.LimitCounter import LimitCounter
+from src import Globals
 
 
 class Source(object):

@@ -3,6 +3,10 @@ import os
 import paramiko
 from paramiko import SSHClient
 from scp import SCPClient
+import threading
+
+# Remember to build the project before distributing it
+# $ pyinstaller --onefile main.py
 
 # Prompt for the login
 login = input("Enter login: ")
@@ -10,10 +14,6 @@ login = input("Enter login: ")
 # Prompt for the password securely
 password = getpass.getpass("Enter password for {}: ".format(login))
 
-metrics_file_name = "results.csv"
-node_project_name = "server"
-master_project_name = "master"
-file_suffix = "-1.0-jar-with-dependencies.jar"
 remote_folder = "/tmp/{}/".format(login)
 
 # List of computers
@@ -37,7 +37,7 @@ if len(allComputers) != len(set(allComputers)):
     exit(0)
 
 
-burstiness_values = [1, 2, 5, 10, 20, 30, 70, 100]
+burstiness_values = [1]  # , 2, 5, 10, 20, 30, 70, 100]
 simulation_time = 10**4
 periodPrintLR = 10**3
 blockSize = 10**1
@@ -46,25 +46,43 @@ blockSize = 10**1
 computers = allComputers[:len(burstiness_values)]
 
 
+# Deploy the python project on computer
+def deploy_project(ssh, remote_folder):
+    # Remove and recreate the remote folder
+    ssh.exec_command("rm -rf {}".format(remote_folder))
+    ssh.exec_command("mkdir -p {}".format(remote_folder))
+
+    # Copy the python project in ./dist/main to the remote folder
+    with SCPClient(ssh.get_transport()) as scp:
+        scp.put("./dist/main", "{}main".format(remote_folder))
+
+
 # Attach the terminal to the process and print all output until python process ends
-def attach_and_run_master(ssh, ips, amount_of_data):
-    stdin, stdout, stderr = ssh.exec_command(
-        "cd {}; java -Xms8g -Xmx10g -jar {}{} {} {}".format(
-            remote_folder, master_project_name, file_suffix, ",".join(ips), amount_of_data))
+def attach_and_run_simulation(ssh, burstiness, simulation_time, periodPrintLR, blockSize):
+    command = (
+        f"cd {remote_folder} && python3 Simulation.py "
+        f"--burstiness {burstiness} "
+        f"--simulation_time {simulation_time} "
+        f"--periodPrintLR {periodPrintLR} "
+        f"--blockSize {blockSize}"
+    )
+    stdin, stdout, stderr = ssh.exec_command(command)
 
     # Print all output and error messages
     count = 0
     while not stdout.channel.exit_status_ready():
+        machine_name = ssh.get_transport().getpeername()[0]
+        print(f"[{machine_name}] ", end="")
         for line in stdout:
             count += 1
             print(line, end="")
-            if (count > 10000):
+            if count > 10000:
                 break
 
         for line in stderr:
             count += 1
             print(line, end="")
-            if (count > 10000):
+            if count > 10000:
                 break
 
     for line in stderr:
@@ -72,64 +90,44 @@ def attach_and_run_master(ssh, ips, amount_of_data):
 
     # Update local metrics file
     with SCPClient(ssh.get_transport()) as scp:
-        scp.get("{}{}".format(
-            remote_folder, metrics_file_name), "./")
+        scp.get(
+            f"{remote_folder}results/response_times_burstiness_{burstiness}.csv", "./results/")
+        scp.get(
+            f"{remote_folder}results/block_response_times_burstiness_{burstiness}.csv", "./results/")
 
 
-index = -1
-for c in computers:
+# Run the simulation on the computer
+def run_simulation_on_computer(index, c):
     try:
-        index += 1
         ssh = SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         ssh.connect(c, username=login, password=password)
+        print("Connected to {}".format(c))
 
-        ssh.exec_command("pkill -u {}".format(login))
+        print("Deploying project on {}".format(c))
+        # deploy_project(ssh, remote_folder)
+        print("Project deployed on {}".format(c))
 
-        ssh.connect(c, username=login, password=password)
-
-        project_name = master_project_name if c == master else node_project_name
-
-        # Remove and recreate the remote folder
-        ssh.exec_command("rm -rf {}".format(remote_folder))
-        ssh.exec_command("mkdir -p {}".format(remote_folder))
-
-        # Copy the jar file to the remote folder
-        with SCPClient(ssh.get_transport()) as scp:
-            scp.put("./{}/target/{}{}".format(project_name, project_name, file_suffix),
-                    "{}{}{}".format(remote_folder, project_name, file_suffix))
-
-        if c != master:
-            ssh.exec_command(
-                "cd {}; java -Xms8g -Xmx10g -jar {}{}".format(remote_folder, project_name, file_suffix))
-            print("Successfully deployed on {} ({})".format(c, index))
-
-        else:
-            print("Deploying master")
-            # if is master add a small delay to ensure that all nodes are ready
-            ssh.exec_command("sleep 1")
-
-            # Varying number of nodes
-            for v in [0.1, 0.05, 0.01]:
-                for i in range(1, len(computers)):
-                    attach_and_run_master(ssh, computers[:i], v)
-
-            # Varying amount of data
-            for percentage in range(1, 11):
-                print("Running with {}% of the data".format(percentage*10))
-                attach_and_run_master(
-                    ssh, computers[:len(computers)//3], percentage/10)
-
-            # delete old results.csv
-            ssh.exec_command("rm -rf {}".format(remote_folder))
-
+        attach_and_run_simulation(
+            ssh, burstiness_values[index], simulation_time, periodPrintLR, blockSize)
     except paramiko.AuthenticationException:
         print("Authentication failed for {}".format(c))
-        break
     except paramiko.SSHException as ssh_exception:
         print("SSH connection failed for {}: {}".format(c, str(ssh_exception)))
     finally:
         ssh.close()
+
+
+index = -1
+threads = []
+for index, c in enumerate(computers):
+    thread = threading.Thread(
+        target=run_simulation_on_computer, args=(index, c))
+    threads.append(thread)
+    thread.start()
+
+for thread in threads:
+    thread.join()
 
 
 # Kill all processes

@@ -1,5 +1,5 @@
-from Packet import Packet
-from sources.Source import Source
+from src.Packet import Packet
+from src.sources.Source import Source
 
 
 class ConstantSource(Source):

@@ -1,7 +1,7 @@
 import numpy as np
 
 from Packet import Packet
-from Source import Source
+from sources.Source import Source
 
 
 class BurstySource(Source):

@@ -37,8 +37,6 @@ class Source(object):
             return
 
         responseTimes = self.responseTimes / self.nbEmissions
-        self.responseTimes = 0
-        self.nbEmissions = 0
 
         self.df_responseTimes.loc[len(self.df_responseTimes)] = {
             'sourceId': self.ident, 'time': self.env.now, 'responseTime': responseTimes
@@ -46,12 +44,12 @@ class Source(object):
 
     def printBlockAverage(self):
         source_data = self.df_responseTimes[self.df_responseTimes['sourceId'] == self.ident]
-        last_responseTimes = source_data.tail(Globals.blockSize)
-        block_average = last_responseTimes['responseTime'].mean()
+        block_average = source_data.tail(Globals.blockSize)[
+            'responseTime'].mean()
 
         index = len(self.df_blockRespTimes)
         self.df_blockRespTimes.loc[index] = {
-            'sourceId': self.ident, 'time': self.env.now, 'avgResponseTime': block_average, 'epsilon_T': np.nan
+            'sourceId': self.ident, 'time': self.env.now, 'responseTime': block_average, 'epsilon_T': np.nan
         }
 
         # Computing the Epsilon
@@ -61,7 +59,7 @@ class Source(object):
         if num_of_blocks < 2:
             return
 
-        blocks_responseTime = blocks_data['avgResponseTime']
+        blocks_responseTime = blocks_data['responseTime']
         sum_of_squares = sum(rt ** 2 for rt in blocks_responseTime)
         square_of_sum = sum(blocks_responseTime) ** 2
 

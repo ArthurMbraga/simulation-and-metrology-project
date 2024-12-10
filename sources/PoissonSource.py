@@ -1,7 +1,7 @@
 import numpy as np
 
 from Packet import Packet
-from Source import Source
+from sources.Source import Source
 
 
 class PoissonSource(Source):
@@ -19,9 +19,6 @@ class PoissonSource(Source):
         return np.random.choice(self.packetSizes, p=self.packetProbabilities)
 
     def run(self):
-        sum = 0
-        start = self.env.now
-
         while True:
             packetSize = self.getPacketSize()
 
@@ -29,11 +26,7 @@ class PoissonSource(Source):
             sourceRate = np.random.exponential(lam)
 
             yield self.env.timeout(sourceRate)
-            sum += packetSize
 
             p = Packet(self.env.now, self.ident, packetSize)
 
             self.q.reception(p)
-            delta_t = self.env.now - start
-
-            # print(f"Avg transmission rate: {sum / delta_t} bytes/s")

@@ -52,15 +52,24 @@ def deploy_project(ssh, remote_folder):
     ssh.exec_command("rm -rf {}".format(remote_folder))
     ssh.exec_command("mkdir -p {}".format(remote_folder))
 
-    # Copy the python project in ./dist/main to the remote folder
-    with SCPClient(ssh.get_transport()) as scp:
-        scp.put("./dist/main", "{}main".format(remote_folder))
+    repo_url = "https://github.com/ArthurMbraga/simulation-and-metrology-project.git"
+    
+    print("Cloning repository on {}".format(remote_folder)) 
+    ssh.exec_command("cd {} && git clone {}".format(remote_folder, repo_url))
+
+    
+    # Create virtual environment
+    ssh.exec_command("cd {} && python3 -m venv venv".format(remote_folder)) 
+    print("Virtual environment created on {}".format(remote_folder))
+    print("Installing requirements on {}".format(remote_folder))
+    ssh.exec_command("cd {} && source venv/bin/activate && pip install -r requirements.txt".format(remote_folder))
+
 
 
 # Attach the terminal to the process and print all output until python process ends
 def attach_and_run_simulation(ssh, burstiness, simulation_time, periodPrintLR, blockSize):
     command = (
-        f"cd {remote_folder} && python3 Simulation.py "
+        f"cd {remote_folder} && source venv/bin/activate && python3 Simulation.py "
         f"--burstiness {burstiness} "
         f"--simulation_time {simulation_time} "
         f"--periodPrintLR {periodPrintLR} "
@@ -71,8 +80,6 @@ def attach_and_run_simulation(ssh, burstiness, simulation_time, periodPrintLR, b
     # Print all output and error messages
     count = 0
     while not stdout.channel.exit_status_ready():
-        machine_name = ssh.get_transport().getpeername()[0]
-        print(f"[{machine_name}] ", end="")
         for line in stdout:
             count += 1
             print(line, end="")

@@ -37,3 +37,7 @@ python main.py --burstiness 5 --simulation_time 10000 --periodPrintLR 10 --block
   - `LimitCounter.py`: Implements a counter with a limit to trigger actions after a certain number of increments.
   - `Globals.py`: Defines global variables and dataframes used across the project.
 - `main.py`: Entry point for running the simulation, parses command-line arguments and starts the simulation with the specified parameters.
+- `DistributedSimulation.py`: Script for running distributed simulations.
+- `results/`: Contains the results of the simulations in CSV format.
+- `singleSimulation.ipynb`: Jupyter notebook for running a single simulation and analyzing the results.
+- `plotResults.ipynb`: Jupyter notebook for plotting the results of the simulations.
